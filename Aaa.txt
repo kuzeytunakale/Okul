@@ -1,0 +1,65 @@
+pip install SpeechRecognition
+pip install PyAudio
+
+import speech_recognition as sr
+
+# Tanıyıcı (Recognizer) nesnesini oluşturuyoruz.
+r = sr.Recognizer()
+
+# Mikrofonu ses kaynağı olarak kullanıyoruz.
+with sr.Microphone() as source:
+    print("Lütfen bir şey söyleyin...")
+    # Ortam sesine göre enerji eşik değerini ayarlayabilirsiniz.
+    r.adjust_for_ambient_noise(source)
+    # Kullanıcının sesini dinliyoruz.
+    audio = r.listen(source)
+
+try:
+    # Google Speech Recognition servisini kullanarak sesi yazıya dönüştürüyoruz.
+    # 'language' parametresi ile Türkçe dil desteği sağlanır.
+    text = r.recognize_google(audio, language="tr-TR")
+    print("Siz dediniz: " + text)
+    
+    # Yazıya çevrilen ifadeye göre yanıt oluşturuyoruz.
+    if "merhaba" in text.lower():
+        print("Makine: Merhaba, nasılsınız?")
+    elif "görüşürüz" in text.lower():
+        print("Makine: Görüşmek üzere!")
+    else:
+        print("Makine: Anlamadım, lütfen tekrar edin.")
+        
+except sr.UnknownValueError:
+    # Ses tanınamadığında
+    print("Makine: Ne dediğinizi anlayamadım.")
+except sr.RequestError as e:
+    # Servise ulaşılamadığında
+    print("Makine: Servise ulaşılamadı; {0}".format(e))
+
+
+import speech_recognition as sr
+
+# Tanıyıcıyı oluşturuyoruz
+r = sr.Recognizer()
+
+# Anahtar kelimeler ve eşik değerleri
+# (Eşik değerleri; ortam koşullarınıza göre ayarlamanız gerekebilir.)
+keywords = [("zıpla", 1e-20), ("eyil", 1e-20), ("kalk", 1e-20)]
+
+with sr.Microphone() as source:
+    print("Lütfen 'zıpla', 'eyil' veya 'kalk' kelimelerinden birini söyleyin...")
+    # Ortam gürültüsünü azaltmak için ayarlama yapıyoruz
+    r.adjust_for_ambient_noise(source)
+    audio = r.listen(source)
+
+try:
+    # PocketSphinx ile keyword spotting (sadece belirttiğimiz kelimelere odaklanır)
+    recognized_text = r.recognize_sphinx(audio, keyword_entries=keywords)
+    print("Algılanan komut:", recognized_text)
+except sr.UnknownValueError:
+    print("Söylediklerinizi anlayamadım.")
+except sr.RequestError as e:
+    print("Servise ulaşılamadı; {0}".format(e))
+
+
+
+https://chatgpt.com/share/67b56c51-ec18-800d-860b-ff9d45710c3f
