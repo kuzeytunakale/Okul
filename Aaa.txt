@@ -1,65 +1,81 @@
-pip install SpeechRecognition
-pip install PyAudio
-
 import speech_recognition as sr
+import pyautogui
+import time
+import threading 
 
-# Tanıyıcı (Recognizer) nesnesini oluşturuyoruz.
-r = sr.Recognizer()
+KOMUT = "zıpla"          
+TUS = 'up'              
+pyautogui.PAUSE = 0.0   # Varsayılan 0.1 saniyedir. 
+PHRASE_TIME_LIMIT = 1.0 # Maksimum dinlenecek ses süresi
 
-# Mikrofonu ses kaynağı olarak kullanıyoruz.
-with sr.Microphone() as source:
-    print("Lütfen bir şey söyleyin...")
-    # Ortam sesine göre enerji eşik değerini ayarlayabilirsiniz.
-    r.adjust_for_ambient_noise(source)
-    # Kullanıcının sesini dinliyoruz.
-    audio = r.listen(source)
 
-try:
-    # Google Speech Recognition servisini kullanarak sesi yazıya dönüştürüyoruz.
-    # 'language' parametresi ile Türkçe dil desteği sağlanır.
-    text = r.recognize_google(audio, language="tr-TR")
-    print("Siz dediniz: " + text)
+running = True 
+
+def press_key():
+  pyautogui.press(TUS)
     
-    # Yazıya çevrilen ifadeye göre yanıt oluşturuyoruz.
-    if "merhaba" in text.lower():
-        print("Makine: Merhaba, nasılsınız?")
-    elif "görüşürüz" in text.lower():
-        print("Makine: Görüşmek üzere!")
-    else:
-        print("Makine: Anlamadım, lütfen tekrar edin.")
+
+def listen_for_command(recognizer, microphone):
+  global running
+  while running:
+    print("Konuş. ") 
+    with microphone as source:
+      
+      # recognizer.adjust_for_ambient_noise(source, duration=0.2)
+      try:
         
-except sr.UnknownValueError:
-    # Ses tanınamadığında
-    print("Makine: Ne dediğinizi anlayamadım.")
-except sr.RequestError as e:
-    # Servise ulaşılamadığında
-    print("Makine: Servise ulaşılamadı; {0}".format(e))
+        audio = recognizer.listen(source, phrase_time_limit=PHRASE_TIME_LIMIT)
+        print("Ses algılandı, işleniyor...")
+      except sr.WaitTimeoutError:
+        # print("Zaman aşımı - Konuşma algılanmadı.") 
+        continue 
+      except Exception as e:
+        print(f"Dinleme sırasında hata: {e}")
+        continue
+
+    try:
+      
+      recognized_text = recognizer.recognize_google(audio, language='tr-TR')
+      print(f"Algılanan: {recognized_text}")
+
+      if KOMUT in recognized_text.lower():
+        
+        # threading.Thread(target=press_key).start() # Thread ile çağırma
+        press_key() # Doğrudan çağırma 
+    except sr.UnknownValueError:
+      # print("Ne dediğin anlaşılamadı.") # Konsolu doldurmaması için yorum satırı
+      pass
+    except sr.RequestError as e:
+      print(f"Google Servis Hatası; {e}")
+      # İnternet bağlantısı yoksa veya API'ye ulaşılamıyorsa bu hata alınır.
+      time.sleep(1) # Hata durumunda kısa bir bekleme
+    except Exception as e:
+      print(f"Tanıma sırasında beklenmedik hata: {e}")
 
 
-import speech_recognition as sr
+# --- Ana Program ---
+if __name__ == "__main__":
+  
+  r = sr.Recognizer()
+  # r.energy_threshold = 4000 
+  # r.dynamic_energy_threshold = True 
 
-# Tanıyıcıyı oluşturuyoruz
-r = sr.Recognizer()
+  mic = sr.Microphone()
 
-# Anahtar kelimeler ve eşik değerleri
-# (Eşik değerleri; ortam koşullarınıza göre ayarlamanız gerekebilir.)
-keywords = [("zıpla", 1e-20), ("eyil", 1e-20), ("kalk", 1e-20)]
+  print("Ortam gürültüsü ayarlanıyor.")
+    
+   # Başlangıçta ortam gürültüsüne göre ayar yapalım
+   r.adjust_for_ambient_noise(source, duration=1)
+   print(f"Enerji Eşiği: {r.energy_threshold:.2f} (Otomatik Ayarlandı)")
+    
+  print(f"\n'{KOMUT}' komutunu söyleyerek dinozoru zıplatabilirsiniz.")
+  
+    time.sleep(2)
 
-with sr.Microphone() as source:
-    print("Lütfen 'zıpla', 'eyil' veya 'kalk' kelimelerinden birini söyleyin...")
-    # Ortam gürültüsünü azaltmak için ayarlama yapıyoruz
-    r.adjust_for_ambient_noise(source)
-    audio = r.listen(source)
-
-try:
-    # PocketSphinx ile keyword spotting (sadece belirttiğimiz kelimelere odaklanır)
-    recognized_text = r.recognize_sphinx(audio, keyword_entries=keywords)
-    print("Algılanan komut:", recognized_text)
-except sr.UnknownValueError:
-    print("Söylediklerinizi anlayamadım.")
-except sr.RequestError as e:
-    print("Servise ulaşılamadı; {0}".format(e))
-
-
-
-https://chatgpt.com/share/67b56c51-ec18-800d-860b-ff9d45710c3f
+  # Dinleme işlemini başlat
+  try:
+    listen_for_command(r, mic)
+  except KeyboardInterrupt:
+    print("\nProgram sonlandırılıyor.")
+  finally:
+    running = False # Döngünün durmasını garantile
