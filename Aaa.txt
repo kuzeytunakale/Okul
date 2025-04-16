@@ -40,3 +40,54 @@ with sr.Microphone() as source:
 
         except KeyboardInterrupt:
             print("\nProgram sonlandırıldı.")
+
+
+
+
+
+
+
+Evet, birkaç tane "zıp" ses dosyanızın olması, tanıma doğruluğunu artırmak için potansiyel olarak kullanılabilir. Bu dosyaları kullanmanın birkaç yolu olabilir:
+1. pocketsphinx ile Anahtar Kelime Listesini İyileştirme (Daha Teknik):
+Eğer pocketsphinx kullanmaya devam etmek istiyorsanız, bu ses dosyalarını kullanarak "zıp" kelimesinin daha doğru bir fonetik transkripsiyonunu bulmaya çalışabilirsiniz. Uluslararası Fonetik Alfabe (IPA) gibi sistemleri kullanarak kendi telaffuzunuza en yakın fonetik gösterimi belirleyip, keyword_entries parametresinde veya daha gelişmiş bir anahtar kelime listesi dosyasında bu gösterimi kullanabilirsiniz. Bu, biraz fonetik bilgisi gerektirebilir.
+2. Picovoice Porcupine ile Özel Anahtar Kelime Eğitimi (Önerilen ve Daha Kolay):
+Daha önce de bahsettiğim gibi, Picovoice Porcupine kütüphanesi, kendi ses kayıtlarınızı kullanarak özel anahtar kelime modelleri eğitmek için tasarlanmıştır. Bu, elinizdeki "zıp" ses dosyalarını en etkili şekilde kullanmanın en kolay yoludur.
+İşte Porcupine ile nasıl yapacağınızın adımları tekrar:
+ * Picovoice Console'a Gidin: https://console.picovoice.ai/ adresine gidin ve bir hesap oluşturun veya giriş yapın.
+ * Yeni Anahtar Kelime Oluşturun: "Create New" -> "Keyword" seçeneğini seçin.
+ * Platformunuzu Seçin: Hedeflediğiniz platformu (Linux, Windows, macOS vb.) seçin.
+ * Ses Kayıtlarınızı Yükleyin: Elinizdeki "zıp" ses dosyalarını yükleyin. Konsol size daha fazla örnek kaydetmenizi de önerebilir. Farklı tonlarda ve ortamlarda kayıtlar eklemek modelin genelleme yeteneğini artırabilir.
+ * Modeli Eğitin ve İndirin: Ses kayıtlarınızı yükledikten sonra modeli eğitin ve .pv uzantılı model dosyasını indirin.
+ * Python Kodunuzu Güncelleyin: Python kodunuzda, daha önce kullandığımız standart anahtar kelime yerine, indirdiğiniz özel model dosyasının yolunu belirterek Porcupine'ı kullanın:
+import pvporcupine
+from pynput.keyboard import Controller, Key
+import struct
+import pyaudio
+import os
+
+keyboard = Controller()
+ACCESS_KEY = "SİZİN_ERİŞİM_ANAHTARINIZ" # Kendi anahtarınızla değiştirin
+CUSTOM_KEYWORD_PATH = os.path.abspath("./zipla_custom_linux.pv") # İndirdiğiniz .pv dosyasının yolunu buraya yazın
+
+try:
+    porcupine = pvporcupine.create(
+        access_key=ACCESS_KEY,
+        keyword_paths=[CUSTOM_KEYWORD_PATH],
+        sensitivities=[0.7]
+    )
+    # ... (ses akışı başlatma ve işleme kodu) ...
+except pvporcupine.PorcupineError as e:
+    print(f"Porcupine hatası: {e}")
+except KeyboardInterrupt:
+    pass
+finally:
+    if 'porcupine' in locals():
+        porcupine.delete()
+    # ... (ses akışını kapatma kodu) ...
+
+Neden Porcupine Daha İyi Bir Seçenek?
+ * Özel Eğitim: Porcupine, sağladığınız ses verileriyle doğrudan eğitildiği için sizin özel telaffuzunuza çok daha iyi uyum sağlar.
+ * Yüksek Doğruluk: Genellikle açık kaynaklı alternatiflere göre daha yüksek doğruluk sunar.
+ * Kullanım Kolaylığı: Picovoice Console, özel model oluşturma sürecini oldukça kolaylaştırır.
+Sonuç:
+Elinizdeki "zıp" ses dosyalarını kullanarak en iyi sonuçları elde etmek için Picovoice Porcupine'ı kullanmanızı öneririm. Ücretsiz bir erişim anahtarı gerektirse de (kişisel kullanım için ücretsizdir), bu, kendi ses verilerinizle eğitilmiş hızlı ve doğru bir yerel anahtar kelime algılama sistemi oluşturmanın en pratik yoludur. pocketsphinx ile de benzer bir şey yapmak mümkün olsa da, bu daha fazla teknik bilgi ve çaba gerektirecektir ve sınırlı veriyle sonuçlar belirsiz olabilir.
