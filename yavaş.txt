@@ -1,0 +1,13 @@
+from selenium import webdriver
+import time
+
+driver = webdriver.Chrome()
+driver.get("chrome://dino/")
+
+speed = 0.75 # İstenen hız değeri (normal hız 1)
+
+while True:
+    driver.execute_script(f"Runner.instance_.setSpeed({speed})")
+    time.sleep(0.1) # Hızın sürekli olarak ayarlanması için kısa bir bekleme
+    #... (Zıplama mantığı)...
+    time.sleep(0.5)
