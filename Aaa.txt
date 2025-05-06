@@ -1,93 +1,220 @@
-pip install pocketsphinx
-
 import speech_recognition as sr
-from pynput.keyboard import Controller, Key
+import pyautogui
 
-keyboard = Controller()
-
-# Ses tanıma nesnesini oluştur
-r = sr.Recognizer()
-
-# Mikrofonu kaynak olarak kullan
-with sr.Microphone() as source:
-    print("Sesli komut bekleniyor (sadece 'zip' demelisiniz)...")
-    r.adjust_for_ambient_noise(source)  # Ortam gürültüsüne göre ayarlama yap
-
-    while True:
+def komut_algila():
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Komut bekleniyor...")
+        r.adjust_for_ambient_noise(source)  # Ortam gürültüsüne göre ayarlama
         try:
-            print("Konuşun:")
             audio = r.listen(source)
+            komut = r.recognize_google(audio, language='tr-TR').lower()
+            print(f"Algılanan komut: {komut}")
+            return komut
+        except sr.UnknownValueError:
+            print("Ne dediğinizi anlayamadım.")
+            return ""
+        except sr.RequestError as e:
+            print(f"Google Speech Recognition servisinden istek yapılamadı; {e}")
+            return ""
 
-            try:
-                # Sphinx kullanarak sesi metne çevir
-                # `keyword_entries` parametresi ile sadece belirli kelimeleri dinleyebiliriz.
-                # Pocketsphinx genellikle anahtar kelimeleri büyük harfle bekler.
-                recognized = r.recognize_sphinx(audio, keyword_entries=[("ZIP", 1)])
-                print(f"Algılanan: {recognized}")
+def zipla():
+    pyautogui.press('space')
+    print("Zıplama komutu gönderildi.")
 
-                if "zip" in recognized.lower():
-                    print("ZIP komutu algılandı! Boşluk tuşuna basılıyor...")
-                    keyboard.press(Key.space)
-                    keyboard.release(Key.space)
-                    print("Dinozor zıpladı!")
+if __name__ == "__main__":
+    print("Chrome Dinozor Zıplatma Uygulaması Başlatıldı!")
+    print("Zıplamak için 'zıpla' demeniz yeterli.")
+    while True:
+        komut = komut_algila()
+        if komut == "zıpla":
+            zipla()
 
-            except sr.UnknownValueError:
-                print("Ses anlaşılamadı.")
-            except sr.RequestError as e:
-                print(f"Sphinx servisinden cevap alınamadı; {e}")
-            except Exception as e:
-                print(f"Bir hata oluştu: {e}")
-
-        except KeyboardInterrupt:
-            print("\nProgram sonlandırıldı.")
-
-
+Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 
 
 
 
-Evet, birkaç tane "zıp" ses dosyanızın olması, tanıma doğruluğunu artırmak için potansiyel olarak kullanılabilir. Bu dosyaları kullanmanın birkaç yolu olabilir:
-1. pocketsphinx ile Anahtar Kelime Listesini İyileştirme (Daha Teknik):
-Eğer pocketsphinx kullanmaya devam etmek istiyorsanız, bu ses dosyalarını kullanarak "zıp" kelimesinin daha doğru bir fonetik transkripsiyonunu bulmaya çalışabilirsiniz. Uluslararası Fonetik Alfabe (IPA) gibi sistemleri kullanarak kendi telaffuzunuza en yakın fonetik gösterimi belirleyip, keyword_entries parametresinde veya daha gelişmiş bir anahtar kelime listesi dosyasında bu gösterimi kullanabilirsiniz. Bu, biraz fonetik bilgisi gerektirebilir.
-2. Picovoice Porcupine ile Özel Anahtar Kelime Eğitimi (Önerilen ve Daha Kolay):
-Daha önce de bahsettiğim gibi, Picovoice Porcupine kütüphanesi, kendi ses kayıtlarınızı kullanarak özel anahtar kelime modelleri eğitmek için tasarlanmıştır. Bu, elinizdeki "zıp" ses dosyalarını en etkili şekilde kullanmanın en kolay yoludur.
-İşte Porcupine ile nasıl yapacağınızın adımları tekrar:
- * Picovoice Console'a Gidin: https://console.picovoice.ai/ adresine gidin ve bir hesap oluşturun veya giriş yapın.
- * Yeni Anahtar Kelime Oluşturun: "Create New" -> "Keyword" seçeneğini seçin.
- * Platformunuzu Seçin: Hedeflediğiniz platformu (Linux, Windows, macOS vb.) seçin.
- * Ses Kayıtlarınızı Yükleyin: Elinizdeki "zıp" ses dosyalarını yükleyin. Konsol size daha fazla örnek kaydetmenizi de önerebilir. Farklı tonlarda ve ortamlarda kayıtlar eklemek modelin genelleme yeteneğini artırabilir.
- * Modeli Eğitin ve İndirin: Ses kayıtlarınızı yükledikten sonra modeli eğitin ve .pv uzantılı model dosyasını indirin.
- * Python Kodunuzu Güncelleyin: Python kodunuzda, daha önce kullandığımız standart anahtar kelime yerine, indirdiğiniz özel model dosyasının yolunu belirterek Porcupine'ı kullanın:
-import pvporcupine
-from pynput.keyboard import Controller, Key
-import struct
-import pyaudio
-import os
 
-keyboard = Controller()
-ACCESS_KEY = "SİZİN_ERİŞİM_ANAHTARINIZ" # Kendi anahtarınızla değiştirin
-CUSTOM_KEYWORD_PATH = os.path.abspath("./zipla_custom_linux.pv") # İndirdiğiniz .pv dosyasının yolunu buraya yazın
 
-try:
-    porcupine = pvporcupine.create(
-        access_key=ACCESS_KEY,
-        keyword_paths=[CUSTOM_KEYWORD_PATH],
-        sensitivities=[0.7]
-    )
-    # ... (ses akışı başlatma ve işleme kodu) ...
-except pvporcupine.PorcupineError as e:
-    print(f"Porcupine hatası: {e}")
-except KeyboardInterrupt:
-    pass
-finally:
-    if 'porcupine' in locals():
-        porcupine.delete()
-    # ... (ses akışını kapatma kodu) ...
 
-Neden Porcupine Daha İyi Bir Seçenek?
- * Özel Eğitim: Porcupine, sağladığınız ses verileriyle doğrudan eğitildiği için sizin özel telaffuzunuza çok daha iyi uyum sağlar.
- * Yüksek Doğruluk: Genellikle açık kaynaklı alternatiflere göre daha yüksek doğruluk sunar.
- * Kullanım Kolaylığı: Picovoice Console, özel model oluşturma sürecini oldukça kolaylaştırır.
-Sonuç:
-Elinizdeki "zıp" ses dosyalarını kullanarak en iyi sonuçları elde etmek için Picovoice Porcupine'ı kullanmanızı öneririm. Ücretsiz bir erişim anahtarı gerektirse de (kişisel kullanım için ücretsizdir), bu, kendi ses verilerinizle eğitilmiş hızlı ve doğru bir yerel anahtar kelime algılama sistemi oluşturmanın en pratik yoludur. pocketsphinx ile de benzer bir şey yapmak mümkün olsa da, bu daha fazla teknik bilgi ve çaba gerektirecektir ve sınırlı veriyle sonuçlar belirsiz olabilir.
+
+
+Harika bir başlangıç! Elinizde 200 adet "zıp" ve 200 adet "zıp değil" olmak üzere toplam 400 adet .wav uzantılı ses dosyanızın olması, temel bir model eğitmek için yeterli olabilir. Şimdi bu dosyaları OpenWakeWord'ün kullanabileceği bir formata nasıl getireceğinize ve modeli nasıl eğiteceğinize odaklanalım.
+
+Adımlar:
+
+OpenWakeWord Geliştirme Sürümünü Yükleyin (Eğer Yüklü Değilse):
+
+Bash
+
+pip install git+https://github.com/rhasspy/openwakeword.git
+Veri Seti Yapılandırma Dosyası Oluşturma:
+
+OpenWakeWord'ün eğitim araçları, genellikle bir yapılandırma dosyası (örneğin, JSON) aracılığıyla veri setinizin nerede olduğunu ve etiketlerini öğrenir. Aşağıdaki gibi bir JSON dosyası oluşturmanız gerekecektir (örneğin, dataset.json):
+
+JSON
+
+{
+  "version": "1.0",
+  "name": "zip_dataset",
+  "description": "Zıp kelimesi tanıma için veri seti",
+  "samples": [
+    {"audio_path": "/path/to/your/zip_sesleri/zip_1.wav", "label": "zip"},
+    {"audio_path": "/path/to/your/zip_sesleri/zip_2.wav", "label": "zip"},
+    // ... diğer 198 "zıp" dosyası
+    {"audio_path": "/path/to/your/diger_sesler/nozip_1.wav", "label": "not-zip"},
+    {"audio_path": "/path/to/your/diger_sesler/nozip_2.wav", "label": "not-zip"},
+    // ... diğer 198 "zıp değil" dosyası
+  ]
+}
+/path/to/your/zip_sesleri/ ve /path/to/your/diger_sesler/ kısımlarını kendi dosya yollarınızla değiştirin.
+Her bir ses dosyanız için audio_path ve label (etiket) bilgilerini ekleyin. Etiketleriniz "zip" ve "not-zip" olabilir.
+Model Konfigürasyon Dosyası Oluşturma:
+
+Modelin mimarisini, özellik çıkarma yöntemlerini ve eğitim parametrelerini belirten bir konfigürasyon dosyasına ihtiyacınız olacak (örneğin, config.yaml). OpenWakeWord deposundaki training/configs dizininde örnek konfigürasyon dosyalarını inceleyebilirsiniz. Basit bir başlangıç için tiny_yolov3.yaml veya mobilenetv2.yaml gibi bir konfigürasyonu kopyalayıp kendi ihtiyaçlarınıza göre düzenleyebilirsiniz.
+
+Önemli ayarlar şunlardır:
+
+model_name: Oluşturulacak modelin adı.
+base_model: Kullanılacak temel model mimarisi.
+feature_extractor: Ses özelliklerini çıkarmak için kullanılacak yöntem (genellikle MFCC).
+dataset: Oluşturduğunuz dataset.json dosyasının yolu.
+wakewords: Tanımak istediğiniz kelimelerin listesi (["zip"]).
+background_noise: "Zıp değil" etiketli ses dosyalarınızın yolu (bir liste veya dizin olabilir).
+training: Eğitim parametreleri (epoch sayısı, batch size, öğrenme oranı vb.).
+Basit bir örnek config.yaml:
+
+YAML
+
+model_name: zip_wakeword
+base_model: tiny_yolov3
+feature_extractor: mfcc
+dataset: /path/to/your/dataset.json
+wakewords:
+  - name: zip
+    phonemes: ["z", "ih", "p"] # Yaklaşık fonetik karşılığı (modelin fonem setine göre ayarlanabilir)
+background_noise:
+  - /path/to/your/diger_sesler/
+training:
+  epochs: 50 # Deneme yanılma ile artırılabilir
+  batch_size: 32
+  learning_rate: 0.001
+/path/to/your/dataset.json ve /path/to/your/diger_sesler/ kısımlarını kendi yollarınızla değiştirin.
+phonemes kısmını, OpenWakeWord'ün kullandığı fonem setine göre ayarlamanız gerekebilir. Bu bilgiyi OpenWakeWord belgelerinde bulabilirsiniz. Eğer emin değilseniz, bu kısmı şimdilik olduğu gibi bırakıp modelin performansına göre ayarlayabilirsiniz.
+Eğitim Komutunu Çalıştırma:
+
+Terminal veya komut istemcisinde OpenWakeWord'ün eğitim scriptini çalıştırın. Bu script genellikle openwakeword/training/train.py konumundadır (eğer direkt GitHub'dan yüklediyseniz).
+
+Bash
+
+python openwakeword/training/train.py --config /path/to/your/config.yaml
+/path/to/your/config.yaml kısmını kendi yapılandırma dosyanızın yoluyla değiştirin.
+Eğitim süreci başlayacak ve modeliniz belirtilen sayıda epoch boyunca eğitilecektir. Eğitim ilerlemesini terminalden takip edebilirsiniz.
+
+Modeli Dışa Aktarma:
+
+Eğitim tamamlandıktan sonra, eğitilmiş modelinizi OpenWakeWord'ün kullanabileceği bir formata (genellikle .tflite veya .onnx) dışa aktarmanız gerekebilir. Eğitim scripti bunu otomatik olarak yapabilir veya ayrı bir dışa aktarma scriptini çalıştırmanız gerekebilir. Eğitim çıktılarında model dosyasının konumunu kontrol edin.
+
+Modeli Python Kodunuzda Kullanma:
+
+Elde ettiğiniz .tflite veya .onnx model dosyasının yolunu, önceki Python kod örneğindeki MODEL_PATH değişkenine vererek kullanabilirsiniz.
+
+Önemli Notlar ve İpuçları:
+
+Veri Kalitesi: Ses dosyalarınızın temiz ve net olduğundan emin olun. Düşük kaliteli veriler modelin performansını olumsuz etkileyebilir.
+Veri Dengelemesi: "Zıp" ve "zıp değil" örneklerinin sayısının dengeli olması, modelin bir sınıfa aşırı odaklanmasını önleyebilir. Elinizdeki 200/200 dengesi iyi bir başlangıç.
+Epoch Sayısı ve Öğrenme Oranı: Eğitim parametrelerini (epoch sayısı, öğrenme oranı vb.) modelinizin performansına göre ayarlamanız gerekebilir. Çok düşük epoch sayısı yetersiz eğitime, çok yüksek epoch sayısı ise aşırı öğrenmeye (overfitting) yol açabilir.
+Doğrulama Veri Seti: İdeal olarak, eğitim için kullandığınız verilerden ayrı bir doğrulama veri seti ayırmanız ve eğitim sırasında modelin bu veri seti üzerindeki performansını izlemeniz, aşırı öğrenmeyi tespit etmenize yardımcı olur. OpenWakeWord yapılandırmasında doğrulama verisi için ayrı bir bölüm olabilir.
+Hata Ayıklama: Eğitim sırasında hatalarla karşılaşırsanız, OpenWakeWord belgelerini ve topluluk forumlarını kontrol edin.
+Bu adımları takip ederek elinizdeki .wav dosyalarından OpenWakeWord için bir model eğitebilir ve Python kodunuzda "zıp" kelimesini tespit etmek için kullanabilirsiniz. Başarılar dilerim!
+
+
+Sesleri waw formatında nasıl kaydedeceğim
+
+
+
+Düzce'den selamlar! .wav formatında ses kaydetmek için birkaç farklı yöntem ve araç kullanabilirsiniz. İşte size yaygın olarak kullanılan bazı yöntemler:
+
+1. Bilgisayarınızın Dahili Araçları:
+
+Windows "Ses Kaydedicisi" Uygulaması:
+
+Windows işletim sisteminde genellikle önceden yüklü olarak gelir.
+Başlat menüsüne "Ses Kaydedicisi" yazarak veya arayarak bulabilirsiniz.
+Uygulamayı açtıktan sonra, mikrofon simgesine tıklayarak kayda başlayabilirsiniz.
+Kaydı bitirdikten sonra, kaydettiğiniz dosyayı sağ tıklayıp "Dosya konumunu aç" seçeneğiyle bulabilir ve genellikle .m4a formatında kaydedildiğini görebilirsiniz. Ancak, bu uygulamada doğrudan .wav kaydetme seçeneği olmayabilir. Ayarlara göz atmanız faydalı olacaktır. Eğer .wav seçeneği yoksa, aşağıdaki daha gelişmiş araçlara yönelebilirsiniz.
+macOS "Sesli Notlar" Uygulaması:
+
+macOS işletim sisteminde de benzer şekilde "Sesli Notlar" adında bir uygulama bulunur.
+Launchpad veya Uygulamalar klasöründen bulabilirsiniz.
+Kırmızı kayıt düğmesine tıklayarak kayda başlayabilirsiniz.
+Kaydedilen dosyalar genellikle macOS'un kendi formatında saklanır. Doğrudan .wav kaydetme seçeneği olmayabilir.
+2. Ücretsiz Ses Kayıt ve Düzenleme Yazılımları:
+
+Bu yazılımlar genellikle daha fazla kontrol ve farklı formatlarda kayıt seçeneği sunar.
+
+Audacity (Önerilen):
+
+Ücretsiz, açık kaynaklı ve çok güçlü bir ses kayıt ve düzenleme yazılımıdır.
+https://www.audacityteam.org/ adresinden indirebilirsiniz.
+Nasıl Kaydedilir:
+Audacity'yi açın.
+Mikrofonunuzun seçili olduğundan emin olun (Araç çubuğundaki mikrofon seçeneği).
+Kırmızı "Kaydet" düğmesine tıklayarak kayda başlayın.
+Kaydı bitirmek için sarı "Durdur" düğmesine tıklayın.
+Kaydedilen sesi .wav formatında kaydetmek için "Dosya" menüsünden "Dışa Aktar" ve ardından "WAV Olarak Dışa Aktar" seçeneğini seçin.
+Dosya adını ve kaydedileceği konumu belirleyin ve "Kaydet"e tıklayın. Gerekirse codec ayarlarını değiştirebilirsiniz (genellikle varsayılan ayarlar yeterlidir).
+OBS Studio:
+
+Genellikle video kaydı ve canlı yayın için kullanılır, ancak ses kaydı için de kullanılabilir.
+https://obsproject.com/ adresinden indirebilirsiniz.
+Nasıl Kaydedilir (Sadece Ses):
+OBS Studio'yu açın.
+"Kaynaklar" bölümünde "+" simgesine tıklayarak "Ses Giriş Yakalayıcı" ekleyin ve mikrofonunuzu seçin.
+"Ayarlar" menüsüne gidin.
+"Çıktı" sekmesine tıklayın.
+"Kayıt Biçimi" olarak "wav" seçin.
+"Kayıt Yolu"nu belirleyin.
+"Kaydı Başlat" düğmesine tıklayarak kayda başlayın.
+Kaydı bitirmek için "Kaydı Durdur" düğmesine tıklayın.
+3. Python ile Ses Kaydı:
+
+Python kullanarak da doğrudan .wav formatında ses kaydedebilirsiniz. Bunun için bazı kütüphaneler mevcuttur:
+
+sounddevice ve scipy.io.wavfile: Bu kütüphaneler birlikte kullanılarak ses kaydedilebilir ve .wav dosyası olarak saklanabilir.
+
+Python
+
+import sounddevice as sd
+from scipy.io.wavfile import write
+
+fs = 44100  # Örnekleme hızı
+seconds = 5  # Kayıt süresi
+
+print("Kayıt başlıyor...")
+myrecording = sd.rec(int(seconds * fs), samplerate=fs, channels=1)
+sd.wait()  # Kayıt bitene kadar bekle
+print("Kayıt bitti.")
+
+filename = "kaydim.wav"
+write(filename, fs, myrecording)
+print(f"Kayıt '{filename}' olarak kaydedildi.")
+Bu basit örnek, 5 saniye boyunca tek kanallı (mono) ses kaydeder ve kaydim.wav adıyla kaydeder. İhtiyacınıza göre örnekleme hızını (fs), süreyi (seconds) ve kanal sayısını (channels) değiştirebilirsiniz. sounddevice kütüphanesinin çalışması için sisteminizde bazı ses sürücülerinin (örneğin, PortAudio) yüklü olması gerekebilir.
+
+Hangi Yöntemi Seçmelisiniz?
+
+Hızlı ve Kolay Kayıtlar İçin: Bilgisayarınızın dahili uygulamalarını deneyebilirsiniz, ancak .wav formatını doğrudan destekleyip desteklemediğini kontrol edin.
+Daha Fazla Kontrol ve .wav Seçeneği İçin: Audacity kesinlikle önerilir. Kullanımı kolaydır ve .wav dahil birçok formatta kayıt ve dışa aktarma imkanı sunar.
+Python ile Otomatik Kayıtlar veya Entegrasyon İçin: sounddevice ve scipy.io.wavfile kütüphanelerini kullanabilirsiniz.
+Umarım bu bilgiler .wav formatında ses kaydetmenize yardımcı olur! Başka sorularınız olursa çekinmeyin.
+
+
+
+
+
+
+Canvas
+
+Gemini hata yapabildiğinden verdiği yanıtları doğrulayın
