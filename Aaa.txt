@@ -32,7 +32,136 @@ if __name__ == "__main__":
 
 Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
+import speech_recognition as sr
+from pynput.keyboard import Controller, Key
+import time
 
+# --- Yapılandırma Ayarları ---
+KEYWORD = "zıpla"
+LANGUAGE = "tr-TR"  # Google için Türkçe
+
+# --- Başlatma ---
+keyboard = Controller()
+recognizer = sr.Recognizer()
+
+# Mikrofon enerji eşiği ve duraklama eşiği ayarları
+# recognizer.energy_threshold = 4000 # Ortamınıza göre ayarlayın
+recognizer.pause_threshold = 0.5 # Konuşma bittikten sonra ne kadar bekleneceği (daha hızlı tepki için)
+
+def press_space():
+    """Boşluk tuşuna basma ve bırakma işlemini simüle eder."""
+    try:
+        print(f"'{KEYWORD}' algılandı! Dinozor zıplatılıyor...")
+        keyboard.press(Key.space)
+        time.sleep(0.05) # Tuşun basılı kalma süresi
+        keyboard.release(Key.space)
+    except Exception as e:
+        print(f"Klavye kontrol hatası: {e}")
+
+# Google API için arka planda dinleme callback fonksiyonu
+def google_callback(recognizer_instance, audio_data):
+    """
+    Arka planda ses algılandığında çağrılır.
+    Google Web Speech API kullanarak sesi metne çevirmeye çalışır.
+    """
+    try:
+        recognized_text = recognizer_instance.recognize_google(audio_data, language=LANGUAGE)
+        print(f"Google algıladı: {recognized_text}") # Ne algılandığını görmek için
+
+        if KEYWORD.lower() in recognized_text.lower():
+            press_space()
+
+    except sr.UnknownValueError:
+        # print("Google: Ne dediğini anlayamadım.")
+        pass
+    except sr.RequestError as e:
+        print(f"Google Web Speech API servis hatası; {e}")
+    except Exception as e:
+        print(f"Google ile işleme sırasında beklenmedik bir hata: {e}")
+
+# --- Ana Program ---
+if __name__ == "__main__":
+    print("Chrome Dinozor Sesli Zıplatma Programı (Google API ile Arka Planda) Başlatıldı!")
+    print(f"'{KEYWORD}' diyerek dinozoru zıplatabilirsiniz.")
+    print("Çıkmak için CTRL+C tuşlarına basın.")
+
+    microphone = sr.Microphone()
+
+    with microphone as source:
+        print("Ortam gürültüsü ayarlanıyor, lütfen 1-2 saniye sessiz olun...")
+        try:
+            recognizer.adjust_for_ambient_noise(source, duration=1.5)
+            print(f"Enerji eşiği ayarlandı: {recognizer.energy_threshold:.2f}")
+        except Exception as e:
+            print(f"adjust_for_ambient_noise sırasında hata: {e}. Varsayılan eşik kullanılacak.")
+
+    print("Mikrofon dinleniyor (Google API)...")
+    stop_listening = recognizer.listen_in_background(microphone, google_callback, phrase_time_limit=3)
+
+    try:
+        while True:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("\nProgram sonlandırılıyor...")
+    finally:
+        if 'stop_listening' in locals() and stop_listening is not None:
+            print("Arka plan dinleyicisi durduruluyor...")
+            stop_listening(wait_for_stop=False)
+
+Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 
+
+import sounddevice as sd
+import numpy as np
+import keyboard
+import time
+
+def genlik_olcum(ses_verisi):
+    """Ses verisinin RMS genliğini hesaplar."""
+    return np.sqrt(np.mean(ses_verisi**2))
+
+def yuksek_ses_dinle_ve_zipla(ornekleme_frekansi, genlik_esigi=0.1, tetikleme_sayisi=5, chunk_size=1024):
+    """
+    Yüksek ses (alkış/bağırma gibi) algılandığında boşluk tuşuna basar.
+
+    Args:
+        ornekleme_frekansi: Sesin örnekleme frekansı.
+        genlik_esigi: Yüksek ses olarak kabul edilecek minimum genlik.
+        tetikleme_sayisi: Zıplama için genliğin ardışık kaç çerçeve boyunca eşiği aşması gerektiği.
+        chunk_size: Her seferinde okunacak ses verisi parçası boyutu.
+    """
+    try:
+        with sd.InputStream(samplerate=ornekleme_frekansi, channels=1, dtype='float32') as stream:
+            print(f"Yüksek ses algılandığında zıplanacak. Genlik eşiği: {genlik_esigi}, Tetikleme Sayısı: {tetikleme_sayisi}")
+            esik_asimi_sayisi = 0
+            while True:
+                ses_verisi, overflowed = stream.read(chunk_size)
+                if not overflowed:
+                    genlik = genlik_olcum(ses_verisi)
+                    print(f"Anlık genlik: {genlik:.4f}")
+                    if genlik > genlik_esigi:
+                        esik_asimi_sayisi += 1
+                        if esik_asimi_sayisi >= tetikleme_sayisi:
+                            keyboard.press_and_release('space')
+                            print("Yüksek ses algılandı, zıplandı!")
+                            esik_asimi_sayisi = 0 # Zıpladıktan sonra sayacı sıfırla
+                            time.sleep(0.2) # Ardışık zıplamaları engellemek için kısa bir bekleme
+                    else:
+                        esik_asimi_sayisi = 0 # Eşiğin altında ise sayacı sıfırla
+
+                time.sleep(0.01) # CPU kullanımını düşürmek için kısa bir bekleme
+
+    except sd.PortAudioError as e:
+        print(f"Ses kartı hatası: {e}")
+    except KeyboardInterrupt:
+        print("\nProgram sonlandırıldı.")
+
+if __name__ == "__main__":
+    ornekleme_frekansi = 44100
+    genlik_esigi_ayarlanabilir = 0.1 # Başlangıç için bir değer, deneme ile ayarlanmalı
+    tetikleme_sayisi_ayarlanabilir = 3 # Ardışık kaç çerçeve eşiği aşmalı (hassasiyet)
+    yuksek_ses_dinle_ve_zipla(ornekleme_frekansi, genlik_esigi_ayarlanabilir, tetikleme_sayisi_ayarlanabilir)
+
+Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 
 
 
 
