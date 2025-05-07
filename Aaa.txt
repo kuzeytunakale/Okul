@@ -1,349 +1,61 @@
-import speech_recognition as sr
+import queue
+import threading
+import json
+import sounddevice as sd
+from vosk import Model, KaldiRecognizer
 import pyautogui
 
-def komut_algila():
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("Komut bekleniyor...")
-        r.adjust_for_ambient_noise(source)  # Ortam gürültüsüne göre ayarlama
-        try:
-            audio = r.listen(source)
-            komut = r.recognize_google(audio, language='tr-TR').lower()
-            print(f"Algılanan komut: {komut}")
-            return komut
-        except sr.UnknownValueError:
-            print("Ne dediğinizi anlayamadım.")
-            return ""
-        except sr.RequestError as e:
-            print(f"Google Speech Recognition servisinden istek yapılamadı; {e}")
-            return ""
+# 1) Parametreler
+MODEL_PATH = "model"       # Vosk Türkçe model klasörünüz
+SAMPLE_RATE = 16000        # Modelin desteklediği örnekleme hızı
+BLOCKSIZE = 8000           # Yaklaşık 0.5 saniyelik blok (8000 frame)
 
-def zipla():
-    pyautogui.press('space')
-    print("Zıplama komutu gönderildi.")
+# 2) Ses verisini kuyruğa koyan callback
+q = queue.Queue()
+def audio_callback(indata, frames, time, status):
+    if status:
+        print("⚠️ Ses hatası:", status)
+    q.put(bytes(indata))
 
-if __name__ == "__main__":
-    print("Chrome Dinozor Zıplatma Uygulaması Başlatıldı!")
-    print("Zıplamak için 'zıpla' demeniz yeterli.")
+# 3) Modeli yükleyip recognizer’ı oluştur
+model = Model(MODEL_PATH)
+rec = KaldiRecognizer(model, SAMPLE_RATE)
+# Kelime zamanlamasına ihtiyacımız yok; reset sonrası temiz algı için:
+rec.SetWords(False)
+rec.SetPartialWords(False)
+
+# 4) Tanıma ve tetikleme döngüsü
+def recognize_loop():
     while True:
-        komut = komut_algila()
-        if komut == "zıpla":
-            zipla()
+        data = q.get()
+        if rec.AcceptWaveform(data):
+            # Paket sonundaki kesin sonuç
+            result = json.loads(rec.Result())
+            text = result.get("text", "")
+            if "zıpla" in text:
+                pyautogui.press("space")
+        else:
+            # Henüz paket bitmeden gelen kısmi sonuç
+            partial = json.loads(rec.PartialResult()).get("partial", "")
+            if "zıpla" in partial:
+                pyautogui.press("space")
+                # Tekrar tetiklenmemesi için resetleyelim
+                rec.Reset()
 
-Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# 5) Mikrofonu başlat ve dinlemeye al
+stream = sd.RawInputStream(
+    samplerate=SAMPLE_RATE,
+    blocksize=BLOCKSIZE,
+    dtype='int16',
+    channels=1,
+    callback=audio_callback
+)
 
-import speech_recognition as sr
-from pynput.keyboard import Controller, Key
-import time
-
-# --- Yapılandırma Ayarları ---
-KEYWORD = "zıpla"
-LANGUAGE = "tr-TR"  # Google için Türkçe
-
-# --- Başlatma ---
-keyboard = Controller()
-recognizer = sr.Recognizer()
-
-# Mikrofon enerji eşiği ve duraklama eşiği ayarları
-# recognizer.energy_threshold = 4000 # Ortamınıza göre ayarlayın
-recognizer.pause_threshold = 0.5 # Konuşma bittikten sonra ne kadar bekleneceği (daha hızlı tepki için)
-
-def press_space():
-    """Boşluk tuşuna basma ve bırakma işlemini simüle eder."""
+print("🎙 Dinleniyor… “zıpla” dediğinizde anında tetikleme yapılacak.")
+with stream:
+    t = threading.Thread(target=recognize_loop, daemon=True)
+    t.start()
     try:
-        print(f"'{KEYWORD}' algılandı! Dinozor zıplatılıyor...")
-        keyboard.press(Key.space)
-        time.sleep(0.05) # Tuşun basılı kalma süresi
-        keyboard.release(Key.space)
-    except Exception as e:
-        print(f"Klavye kontrol hatası: {e}")
-
-# Google API için arka planda dinleme callback fonksiyonu
-def google_callback(recognizer_instance, audio_data):
-    """
-    Arka planda ses algılandığında çağrılır.
-    Google Web Speech API kullanarak sesi metne çevirmeye çalışır.
-    """
-    try:
-        recognized_text = recognizer_instance.recognize_google(audio_data, language=LANGUAGE)
-        print(f"Google algıladı: {recognized_text}") # Ne algılandığını görmek için
-
-        if KEYWORD.lower() in recognized_text.lower():
-            press_space()
-
-    except sr.UnknownValueError:
-        # print("Google: Ne dediğini anlayamadım.")
-        pass
-    except sr.RequestError as e:
-        print(f"Google Web Speech API servis hatası; {e}")
-    except Exception as e:
-        print(f"Google ile işleme sırasında beklenmedik bir hata: {e}")
-
-# --- Ana Program ---
-if __name__ == "__main__":
-    print("Chrome Dinozor Sesli Zıplatma Programı (Google API ile Arka Planda) Başlatıldı!")
-    print(f"'{KEYWORD}' diyerek dinozoru zıplatabilirsiniz.")
-    print("Çıkmak için CTRL+C tuşlarına basın.")
-
-    microphone = sr.Microphone()
-
-    with microphone as source:
-        print("Ortam gürültüsü ayarlanıyor, lütfen 1-2 saniye sessiz olun...")
-        try:
-            recognizer.adjust_for_ambient_noise(source, duration=1.5)
-            print(f"Enerji eşiği ayarlandı: {recognizer.energy_threshold:.2f}")
-        except Exception as e:
-            print(f"adjust_for_ambient_noise sırasında hata: {e}. Varsayılan eşik kullanılacak.")
-
-    print("Mikrofon dinleniyor (Google API)...")
-    stop_listening = recognizer.listen_in_background(microphone, google_callback, phrase_time_limit=3)
-
-    try:
-        while True:
-            time.sleep(0.1)
+        threading.Event().wait()  # Ctrl+C ile çıkana kadar çalışır
     except KeyboardInterrupt:
-        print("\nProgram sonlandırılıyor...")
-    finally:
-        if 'stop_listening' in locals() and stop_listening is not None:
-            print("Arka plan dinleyicisi durduruluyor...")
-            stop_listening(wait_for_stop=False)
-
-Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 
-
-import sounddevice as sd
-import numpy as np
-import keyboard
-import time
-
-def genlik_olcum(ses_verisi):
-    """Ses verisinin RMS genliğini hesaplar."""
-    return np.sqrt(np.mean(ses_verisi**2))
-
-def yuksek_ses_dinle_ve_zipla(ornekleme_frekansi, genlik_esigi=0.1, tetikleme_sayisi=5, chunk_size=1024):
-    """
-    Yüksek ses (alkış/bağırma gibi) algılandığında boşluk tuşuna basar.
-
-    Args:
-        ornekleme_frekansi: Sesin örnekleme frekansı.
-        genlik_esigi: Yüksek ses olarak kabul edilecek minimum genlik.
-        tetikleme_sayisi: Zıplama için genliğin ardışık kaç çerçeve boyunca eşiği aşması gerektiği.
-        chunk_size: Her seferinde okunacak ses verisi parçası boyutu.
-    """
-    try:
-        with sd.InputStream(samplerate=ornekleme_frekansi, channels=1, dtype='float32') as stream:
-            print(f"Yüksek ses algılandığında zıplanacak. Genlik eşiği: {genlik_esigi}, Tetikleme Sayısı: {tetikleme_sayisi}")
-            esik_asimi_sayisi = 0
-            while True:
-                ses_verisi, overflowed = stream.read(chunk_size)
-                if not overflowed:
-                    genlik = genlik_olcum(ses_verisi)
-                    print(f"Anlık genlik: {genlik:.4f}")
-                    if genlik > genlik_esigi:
-                        esik_asimi_sayisi += 1
-                        if esik_asimi_sayisi >= tetikleme_sayisi:
-                            keyboard.press_and_release('space')
-                            print("Yüksek ses algılandı, zıplandı!")
-                            esik_asimi_sayisi = 0 # Zıpladıktan sonra sayacı sıfırla
-                            time.sleep(0.2) # Ardışık zıplamaları engellemek için kısa bir bekleme
-                    else:
-                        esik_asimi_sayisi = 0 # Eşiğin altında ise sayacı sıfırla
-
-                time.sleep(0.01) # CPU kullanımını düşürmek için kısa bir bekleme
-
-    except sd.PortAudioError as e:
-        print(f"Ses kartı hatası: {e}")
-    except KeyboardInterrupt:
-        print("\nProgram sonlandırıldı.")
-
-if __name__ == "__main__":
-    ornekleme_frekansi = 44100
-    genlik_esigi_ayarlanabilir = 0.1 # Başlangıç için bir değer, deneme ile ayarlanmalı
-    tetikleme_sayisi_ayarlanabilir = 3 # Ardışık kaç çerçeve eşiği aşmalı (hassasiyet)
-    yuksek_ses_dinle_ve_zipla(ornekleme_frekansi, genlik_esigi_ayarlanabilir, tetikleme_sayisi_ayarlanabilir)
-
-Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 
-
-
-
-
-
-
-
-
-Harika bir başlangıç! Elinizde 200 adet "zıp" ve 200 adet "zıp değil" olmak üzere toplam 400 adet .wav uzantılı ses dosyanızın olması, temel bir model eğitmek için yeterli olabilir. Şimdi bu dosyaları OpenWakeWord'ün kullanabileceği bir formata nasıl getireceğinize ve modeli nasıl eğiteceğinize odaklanalım.
-
-Adımlar:
-
-OpenWakeWord Geliştirme Sürümünü Yükleyin (Eğer Yüklü Değilse):
-
-Bash
-
-pip install git+https://github.com/rhasspy/openwakeword.git
-Veri Seti Yapılandırma Dosyası Oluşturma:
-
-OpenWakeWord'ün eğitim araçları, genellikle bir yapılandırma dosyası (örneğin, JSON) aracılığıyla veri setinizin nerede olduğunu ve etiketlerini öğrenir. Aşağıdaki gibi bir JSON dosyası oluşturmanız gerekecektir (örneğin, dataset.json):
-
-JSON
-
-{
-  "version": "1.0",
-  "name": "zip_dataset",
-  "description": "Zıp kelimesi tanıma için veri seti",
-  "samples": [
-    {"audio_path": "/path/to/your/zip_sesleri/zip_1.wav", "label": "zip"},
-    {"audio_path": "/path/to/your/zip_sesleri/zip_2.wav", "label": "zip"},
-    // ... diğer 198 "zıp" dosyası
-    {"audio_path": "/path/to/your/diger_sesler/nozip_1.wav", "label": "not-zip"},
-    {"audio_path": "/path/to/your/diger_sesler/nozip_2.wav", "label": "not-zip"},
-    // ... diğer 198 "zıp değil" dosyası
-  ]
-}
-/path/to/your/zip_sesleri/ ve /path/to/your/diger_sesler/ kısımlarını kendi dosya yollarınızla değiştirin.
-Her bir ses dosyanız için audio_path ve label (etiket) bilgilerini ekleyin. Etiketleriniz "zip" ve "not-zip" olabilir.
-Model Konfigürasyon Dosyası Oluşturma:
-
-Modelin mimarisini, özellik çıkarma yöntemlerini ve eğitim parametrelerini belirten bir konfigürasyon dosyasına ihtiyacınız olacak (örneğin, config.yaml). OpenWakeWord deposundaki training/configs dizininde örnek konfigürasyon dosyalarını inceleyebilirsiniz. Basit bir başlangıç için tiny_yolov3.yaml veya mobilenetv2.yaml gibi bir konfigürasyonu kopyalayıp kendi ihtiyaçlarınıza göre düzenleyebilirsiniz.
-
-Önemli ayarlar şunlardır:
-
-model_name: Oluşturulacak modelin adı.
-base_model: Kullanılacak temel model mimarisi.
-feature_extractor: Ses özelliklerini çıkarmak için kullanılacak yöntem (genellikle MFCC).
-dataset: Oluşturduğunuz dataset.json dosyasının yolu.
-wakewords: Tanımak istediğiniz kelimelerin listesi (["zip"]).
-background_noise: "Zıp değil" etiketli ses dosyalarınızın yolu (bir liste veya dizin olabilir).
-training: Eğitim parametreleri (epoch sayısı, batch size, öğrenme oranı vb.).
-Basit bir örnek config.yaml:
-
-YAML
-
-model_name: zip_wakeword
-base_model: tiny_yolov3
-feature_extractor: mfcc
-dataset: /path/to/your/dataset.json
-wakewords:
-  - name: zip
-    phonemes: ["z", "ih", "p"] # Yaklaşık fonetik karşılığı (modelin fonem setine göre ayarlanabilir)
-background_noise:
-  - /path/to/your/diger_sesler/
-training:
-  epochs: 50 # Deneme yanılma ile artırılabilir
-  batch_size: 32
-  learning_rate: 0.001
-/path/to/your/dataset.json ve /path/to/your/diger_sesler/ kısımlarını kendi yollarınızla değiştirin.
-phonemes kısmını, OpenWakeWord'ün kullandığı fonem setine göre ayarlamanız gerekebilir. Bu bilgiyi OpenWakeWord belgelerinde bulabilirsiniz. Eğer emin değilseniz, bu kısmı şimdilik olduğu gibi bırakıp modelin performansına göre ayarlayabilirsiniz.
-Eğitim Komutunu Çalıştırma:
-
-Terminal veya komut istemcisinde OpenWakeWord'ün eğitim scriptini çalıştırın. Bu script genellikle openwakeword/training/train.py konumundadır (eğer direkt GitHub'dan yüklediyseniz).
-
-Bash
-
-python openwakeword/training/train.py --config /path/to/your/config.yaml
-/path/to/your/config.yaml kısmını kendi yapılandırma dosyanızın yoluyla değiştirin.
-Eğitim süreci başlayacak ve modeliniz belirtilen sayıda epoch boyunca eğitilecektir. Eğitim ilerlemesini terminalden takip edebilirsiniz.
-
-Modeli Dışa Aktarma:
-
-Eğitim tamamlandıktan sonra, eğitilmiş modelinizi OpenWakeWord'ün kullanabileceği bir formata (genellikle .tflite veya .onnx) dışa aktarmanız gerekebilir. Eğitim scripti bunu otomatik olarak yapabilir veya ayrı bir dışa aktarma scriptini çalıştırmanız gerekebilir. Eğitim çıktılarında model dosyasının konumunu kontrol edin.
-
-Modeli Python Kodunuzda Kullanma:
-
-Elde ettiğiniz .tflite veya .onnx model dosyasının yolunu, önceki Python kod örneğindeki MODEL_PATH değişkenine vererek kullanabilirsiniz.
-
-Önemli Notlar ve İpuçları:
-
-Veri Kalitesi: Ses dosyalarınızın temiz ve net olduğundan emin olun. Düşük kaliteli veriler modelin performansını olumsuz etkileyebilir.
-Veri Dengelemesi: "Zıp" ve "zıp değil" örneklerinin sayısının dengeli olması, modelin bir sınıfa aşırı odaklanmasını önleyebilir. Elinizdeki 200/200 dengesi iyi bir başlangıç.
-Epoch Sayısı ve Öğrenme Oranı: Eğitim parametrelerini (epoch sayısı, öğrenme oranı vb.) modelinizin performansına göre ayarlamanız gerekebilir. Çok düşük epoch sayısı yetersiz eğitime, çok yüksek epoch sayısı ise aşırı öğrenmeye (overfitting) yol açabilir.
-Doğrulama Veri Seti: İdeal olarak, eğitim için kullandığınız verilerden ayrı bir doğrulama veri seti ayırmanız ve eğitim sırasında modelin bu veri seti üzerindeki performansını izlemeniz, aşırı öğrenmeyi tespit etmenize yardımcı olur. OpenWakeWord yapılandırmasında doğrulama verisi için ayrı bir bölüm olabilir.
-Hata Ayıklama: Eğitim sırasında hatalarla karşılaşırsanız, OpenWakeWord belgelerini ve topluluk forumlarını kontrol edin.
-Bu adımları takip ederek elinizdeki .wav dosyalarından OpenWakeWord için bir model eğitebilir ve Python kodunuzda "zıp" kelimesini tespit etmek için kullanabilirsiniz. Başarılar dilerim!
-
-
-Sesleri waw formatında nasıl kaydedeceğim
-
-
-
-Düzce'den selamlar! .wav formatında ses kaydetmek için birkaç farklı yöntem ve araç kullanabilirsiniz. İşte size yaygın olarak kullanılan bazı yöntemler:
-
-1. Bilgisayarınızın Dahili Araçları:
-
-Windows "Ses Kaydedicisi" Uygulaması:
-
-Windows işletim sisteminde genellikle önceden yüklü olarak gelir.
-Başlat menüsüne "Ses Kaydedicisi" yazarak veya arayarak bulabilirsiniz.
-Uygulamayı açtıktan sonra, mikrofon simgesine tıklayarak kayda başlayabilirsiniz.
-Kaydı bitirdikten sonra, kaydettiğiniz dosyayı sağ tıklayıp "Dosya konumunu aç" seçeneğiyle bulabilir ve genellikle .m4a formatında kaydedildiğini görebilirsiniz. Ancak, bu uygulamada doğrudan .wav kaydetme seçeneği olmayabilir. Ayarlara göz atmanız faydalı olacaktır. Eğer .wav seçeneği yoksa, aşağıdaki daha gelişmiş araçlara yönelebilirsiniz.
-macOS "Sesli Notlar" Uygulaması:
-
-macOS işletim sisteminde de benzer şekilde "Sesli Notlar" adında bir uygulama bulunur.
-Launchpad veya Uygulamalar klasöründen bulabilirsiniz.
-Kırmızı kayıt düğmesine tıklayarak kayda başlayabilirsiniz.
-Kaydedilen dosyalar genellikle macOS'un kendi formatında saklanır. Doğrudan .wav kaydetme seçeneği olmayabilir.
-2. Ücretsiz Ses Kayıt ve Düzenleme Yazılımları:
-
-Bu yazılımlar genellikle daha fazla kontrol ve farklı formatlarda kayıt seçeneği sunar.
-
-Audacity (Önerilen):
-
-Ücretsiz, açık kaynaklı ve çok güçlü bir ses kayıt ve düzenleme yazılımıdır.
-https://www.audacityteam.org/ adresinden indirebilirsiniz.
-Nasıl Kaydedilir:
-Audacity'yi açın.
-Mikrofonunuzun seçili olduğundan emin olun (Araç çubuğundaki mikrofon seçeneği).
-Kırmızı "Kaydet" düğmesine tıklayarak kayda başlayın.
-Kaydı bitirmek için sarı "Durdur" düğmesine tıklayın.
-Kaydedilen sesi .wav formatında kaydetmek için "Dosya" menüsünden "Dışa Aktar" ve ardından "WAV Olarak Dışa Aktar" seçeneğini seçin.
-Dosya adını ve kaydedileceği konumu belirleyin ve "Kaydet"e tıklayın. Gerekirse codec ayarlarını değiştirebilirsiniz (genellikle varsayılan ayarlar yeterlidir).
-OBS Studio:
-
-Genellikle video kaydı ve canlı yayın için kullanılır, ancak ses kaydı için de kullanılabilir.
-https://obsproject.com/ adresinden indirebilirsiniz.
-Nasıl Kaydedilir (Sadece Ses):
-OBS Studio'yu açın.
-"Kaynaklar" bölümünde "+" simgesine tıklayarak "Ses Giriş Yakalayıcı" ekleyin ve mikrofonunuzu seçin.
-"Ayarlar" menüsüne gidin.
-"Çıktı" sekmesine tıklayın.
-"Kayıt Biçimi" olarak "wav" seçin.
-"Kayıt Yolu"nu belirleyin.
-"Kaydı Başlat" düğmesine tıklayarak kayda başlayın.
-Kaydı bitirmek için "Kaydı Durdur" düğmesine tıklayın.
-3. Python ile Ses Kaydı:
-
-Python kullanarak da doğrudan .wav formatında ses kaydedebilirsiniz. Bunun için bazı kütüphaneler mevcuttur:
-
-sounddevice ve scipy.io.wavfile: Bu kütüphaneler birlikte kullanılarak ses kaydedilebilir ve .wav dosyası olarak saklanabilir.
-
-Python
-
-import sounddevice as sd
-from scipy.io.wavfile import write
-
-fs = 44100  # Örnekleme hızı
-seconds = 5  # Kayıt süresi
-
-print("Kayıt başlıyor...")
-myrecording = sd.rec(int(seconds * fs), samplerate=fs, channels=1)
-sd.wait()  # Kayıt bitene kadar bekle
-print("Kayıt bitti.")
-
-filename = "kaydim.wav"
-write(filename, fs, myrecording)
-print(f"Kayıt '{filename}' olarak kaydedildi.")
-Bu basit örnek, 5 saniye boyunca tek kanallı (mono) ses kaydeder ve kaydim.wav adıyla kaydeder. İhtiyacınıza göre örnekleme hızını (fs), süreyi (seconds) ve kanal sayısını (channels) değiştirebilirsiniz. sounddevice kütüphanesinin çalışması için sisteminizde bazı ses sürücülerinin (örneğin, PortAudio) yüklü olması gerekebilir.
-
-Hangi Yöntemi Seçmelisiniz?
-
-Hızlı ve Kolay Kayıtlar İçin: Bilgisayarınızın dahili uygulamalarını deneyebilirsiniz, ancak .wav formatını doğrudan destekleyip desteklemediğini kontrol edin.
-Daha Fazla Kontrol ve .wav Seçeneği İçin: Audacity kesinlikle önerilir. Kullanımı kolaydır ve .wav dahil birçok formatta kayıt ve dışa aktarma imkanı sunar.
-Python ile Otomatik Kayıtlar veya Entegrasyon İçin: sounddevice ve scipy.io.wavfile kütüphanelerini kullanabilirsiniz.
-Umarım bu bilgiler .wav formatında ses kaydetmenize yardımcı olur! Başka sorularınız olursa çekinmeyin.
-
-
-
-
-
-
-Canvas
-
-Gemini hata yapabildiğinden verdiği yanıtları doğrulayın
+        print("\n⚙️ Çıkılıyor…")
